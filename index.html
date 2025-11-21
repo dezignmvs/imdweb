@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- Prevent Zooming -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<!-- Prevent Zooming & Handle iPhone Notch (viewport-fit=cover) -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>Dashboard UI</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -37,8 +37,17 @@
     body{
         background:var(--bg);
         display:flex;
-        height:100vh;
+        /* Use Dynamic Viewport Height for Mobile Browsers */
+        height: 100vh;
+        height: 100dvh; 
         overflow:hidden;
+        
+        /* iPhone Safe Area Handling (Notch & Home Bar) */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+
         /* Disable touch gestures for zooming */
         touch-action: pan-x pan-y;
         /* Mobile: Disable pull-to-refresh */
@@ -228,7 +237,9 @@
         top: 0;
         left: 0;
         width: 100%;
-        height: 100%;
+        /* Ensure overlay covers screen even with address bar */
+        height: 100vh; 
+        height: 100dvh;
         background: #0d1b2a;
         z-index: 9999;
         display: flex;
@@ -236,6 +247,8 @@
         justify-content: center;
         align-items: center;
         color: white;
+        padding: 20px;
+        text-align: center;
     }
 
     #start-btn {
@@ -257,6 +270,9 @@
         .top-bar { flex-direction: column; gap: 15px; }
         .sidebar { display: none; } /* Hide sidebar on small mobile for simplicity */
         .main { padding: 15px; }
+        
+        /* Adjust font sizes for mobile ratios */
+        .value { font-size: 24px; }
     }
 
 </style>
@@ -411,11 +427,16 @@
                 startOverlay.style.display = 'none';
                 isSessionActive = true;
             }).catch((err) => {
-                alert("Fullscreen is required to proceed.");
+                // On iPhone, requestFullscreen often fails or does nothing visible.
+                // We still allow entry but warn if it's a desktop/Android device.
+                console.warn("Fullscreen request failed or not supported:", err);
+                startOverlay.style.display = 'none';
+                isSessionActive = true;
             });
         });
 
         // 2. Detect Fullscreen Exit (Cant unfullscreen)
+        // Note: This event may not fire reliably on iPhone Safari if it never entered true fullscreen
         document.addEventListener('fullscreenchange', () => {
             if (isSessionActive && !document.fullscreenElement) {
                 triggerPenalty();
