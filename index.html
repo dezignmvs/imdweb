@@ -29,6 +29,9 @@
         -moz-user-select: none; 
         -ms-user-select: none; 
         user-select: none; 
+        /* Mobile: Disable tap highlight and context menu callout */
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
     }
 
     body{
@@ -38,6 +41,8 @@
         overflow:hidden;
         /* Disable touch gestures for zooming */
         touch-action: pan-x pan-y;
+        /* Mobile: Disable pull-to-refresh */
+        overscroll-behavior: none;
     }
 
     /* SIDEBAR */
@@ -461,6 +466,32 @@
                 event.preventDefault();
             }
         }, { passive: false });
+
+        // --- MOBILE SPECIFIC SECURITY ---
+
+        // 5. Prevent Pinch Zoom & Multi-touch (Mobile)
+        document.addEventListener('touchmove', function(event) {
+            // If more than one finger is used, it's likely a zoom or gesture
+            if (event.touches.length > 1) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchstart', function(event) {
+            if (event.touches.length > 1) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        // 6. Prevent Double Tap to Zoom (Mobile)
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(event) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
 
     </script>
 
