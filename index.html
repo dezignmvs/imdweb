@@ -51,9 +51,9 @@
         padding-right: env(safe-area-inset-right);
 
         /* Disable browser touch actions */
-        touch-action: none; /* We will handle scrolling manually if needed, or use specific pan settings */
-        touch-action: pan-y; /* Allow vertical scroll only */
-        overscroll-behavior: none; /* Prevent pull-to-refresh bounce */
+        touch-action: none; 
+        touch-action: pan-y; 
+        overscroll-behavior: none;
     }
 
     /* SIDEBAR */
@@ -283,7 +283,7 @@
     <div id="start-overlay">
         <h1>Security Check</h1>
         <p>Tap the button below to start.</p>
-        <p style="font-size:12px; color:#888; margin-top:10px;">Do not switch tabs or exit fullscreen.</p>
+        <p style="font-size:12px; color:#888; margin-top:10px;">You can only access this page ONCE.</p>
         <button id="start-btn">ENTER SECURE DASHBOARD</button>
     </div>
 
@@ -372,21 +372,22 @@
 
     <!-- SECURITY SCRIPTS -->
     <script>
+        // --- ONE TIME USE ENFORCEMENT ---
+        // This runs immediately. If they have ever clicked start before, they are blocked.
+        if (localStorage.getItem('has_attempted') === 'true') {
+            showSubmittedScreen("You submitted once.");
+            // We throw an error to deliberately stop the rest of the script execution
+            throw new Error("Session already used."); 
+        }
+
         const startOverlay = document.getElementById('start-overlay');
         const startBtn = document.getElementById('start-btn');
         let isSessionActive = false;
         let isPenaltyTriggered = false;
         let lastTouchEnd = 0;
 
-        // 1. PENALTY FUNCTION (Instant DOM Replacement)
-        function triggerPenalty(reason) {
-            if(isPenaltyTriggered) return;
-            isPenaltyTriggered = true;
-
-            // Debug log (optional)
-            console.log("Penalty triggered by:", reason);
-
-            // Instant Wipe
+        // Helper: The "Submitted" Screen Logic
+        function showSubmittedScreen(reason) {
             document.body.innerHTML = `
                 <div style="
                     position: fixed; top:0; left:0;
@@ -406,27 +407,41 @@
                     </div>
                     
                     <h1 style="color:#111; font-size:28px; text-align:center;">Data Submitted</h1>
-                    <p style="color:#666; font-size:14px; margin-top:10px;">Session closed due to security violation.</p>
-                    <p style="color:#999; font-size:12px; margin-top:5px;">Reason: ${reason}</p>
+                    <p style="color:#666; font-size:14px; margin-top:10px;">${reason}</p>
                 </div>
             `;
             document.body.style.background = '#fff';
+        }
+
+        // 1. PENALTY FUNCTION
+        function triggerPenalty(reason) {
+            if(isPenaltyTriggered) return;
+            isPenaltyTriggered = true;
+
+            // Mark as submitted globally
+            localStorage.setItem('has_attempted', 'true');
+
+            console.log("Penalty triggered by:", reason);
+            showSubmittedScreen("Session closed due to security violation.");
         }
 
         // 2. START BUTTON
         startBtn.addEventListener('click', () => {
             const elem = document.documentElement;
             
-            // Try standard fullscreen (Android/Desktop)
+            // ** MARK SESSION AS USED IMMEDIATELY ON START **
+            // This means if they reload page after this click, they are locked out.
+            localStorage.setItem('has_attempted', 'true');
+
+            // Try standard fullscreen
             if (elem.requestFullscreen) {
-                elem.requestFullscreen().catch(err => console.log("Fullscreen denied (iOS?)"));
-            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.requestFullscreen().catch(err => console.log("Fullscreen denied"));
+            } else if (elem.webkitRequestFullscreen) { 
                 elem.webkitRequestFullscreen();
             }
 
-            // Start Session regardless of fullscreen success (essential for iOS)
             startOverlay.style.display = 'none';
-            setTimeout(() => { isSessionActive = true; }, 500); // Small delay to prevent instant trigger
+            setTimeout(() => { isSessionActive = true; }, 500);
         });
 
         // 3. WATCHDOGS
@@ -438,26 +453,24 @@
             }
         });
 
-        // B. Window Blur (Extra layer for Mobile)
+        // B. Window Blur
         window.addEventListener('blur', () => {
             if (isSessionActive) {
                 triggerPenalty('Window Lost Focus');
             }
         });
 
-        // C. Fullscreen Exit (Only if supported)
+        // C. Fullscreen Exit
         document.addEventListener('fullscreenchange', () => {
             if (isSessionActive && !document.fullscreenElement) {
-                // Double check if it's a mobile device where fullscreen is shaky
                 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                // If on desktop, strict enforcement. On mobile, we rely more on visibilitychange.
                 if (!isMobile) {
                     triggerPenalty('Exited Fullscreen');
                 }
             }
         });
 
-        // 4. NAVIGATION LOCK (Back Button)
+        // 4. NAVIGATION LOCK
         history.pushState(null, null, location.href);
         window.onpopstate = function () {
             if(isSessionActive) {
@@ -467,29 +480,20 @@
         };
 
         // 5. INTERACTION LOCKS
-
-        // Disable Right Click
         document.addEventListener('contextmenu', e => e.preventDefault());
-
-        // Disable Keyboard Shortcuts
+        
         document.onkeydown = function(e) {
-            if(e.keyCode == 123) return false; // F12
+            if(e.keyCode == 123) return false; 
             if(e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'p')) return false;
         }
 
-        // Mobile: Prevent Pinch Zoom (Multi-touch)
         document.addEventListener('touchmove', function(e) {
-            if (e.touches.length > 1) {
-                e.preventDefault(); // Block pinch
-            }
+            if (e.touches.length > 1) e.preventDefault();
         }, { passive: false });
 
-        // Mobile: Prevent Double Tap Zoom
         document.addEventListener('touchend', function(e) {
             const now = (new Date()).getTime();
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault();
-            }
+            if (now - lastTouchEnd <= 300) e.preventDefault();
             lastTouchEnd = now;
         }, false);
 
