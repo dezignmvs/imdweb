@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- Prevent Zooming & Handle iPhone Notch (viewport-fit=cover) -->
+<!-- Prevent Zooming, Handle iPhone Notch, and Force App Mode -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Dashboard UI</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -24,12 +26,12 @@
         padding:0;
         font-family:"Inter", sans-serif;
         box-sizing:border-box;
-        /* Prevent text selection to make it harder to copy/edit content */
+        /* Prevent text selection */
         -webkit-user-select: none; 
         -moz-user-select: none; 
         -ms-user-select: none; 
         user-select: none; 
-        /* Mobile: Disable tap highlight and context menu callout */
+        /* Mobile: Disable tap highlight and context menu */
         -webkit-tap-highlight-color: transparent;
         -webkit-touch-callout: none;
     }
@@ -37,21 +39,21 @@
     body{
         background:var(--bg);
         display:flex;
-        /* Use Dynamic Viewport Height for Mobile Browsers */
+        /* Dynamic Viewport Height for Mobile */
         height: 100vh;
         height: 100dvh; 
         overflow:hidden;
         
-        /* iPhone Safe Area Handling (Notch & Home Bar) */
+        /* iPhone Safe Area Handling */
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);
         padding-left: env(safe-area-inset-left);
         padding-right: env(safe-area-inset-right);
 
-        /* Disable touch gestures for zooming */
-        touch-action: pan-x pan-y;
-        /* Mobile: Disable pull-to-refresh */
-        overscroll-behavior: none;
+        /* Disable browser touch actions */
+        touch-action: none; /* We will handle scrolling manually if needed, or use specific pan settings */
+        touch-action: pan-y; /* Allow vertical scroll only */
+        overscroll-behavior: none; /* Prevent pull-to-refresh bounce */
     }
 
     /* SIDEBAR */
@@ -99,6 +101,8 @@
         width:100%;
         overflow-y:auto;
         padding:20px 35px;
+        /* Enable momentum scrolling on iOS */
+        -webkit-overflow-scrolling: touch;
     }
 
     /* TOP BAR */
@@ -125,7 +129,6 @@
         outline:none;
         font-size:14px;
         width:100%;
-        /* Allow typing in input */
         user-select: text;
     }
 
@@ -237,9 +240,7 @@
         top: 0;
         left: 0;
         width: 100%;
-        /* Ensure overlay covers screen even with address bar */
-        height: 100vh; 
-        height: 100dvh;
+        height: 100%;
         background: #0d1b2a;
         z-index: 9999;
         display: flex;
@@ -268,10 +269,8 @@
         .hero { height: auto; flex-direction: column-reverse; text-align: center; }
         .cards { flex-direction: column; }
         .top-bar { flex-direction: column; gap: 15px; }
-        .sidebar { display: none; } /* Hide sidebar on small mobile for simplicity */
+        .sidebar { display: none; } 
         .main { padding: 15px; }
-        
-        /* Adjust font sizes for mobile ratios */
         .value { font-size: 24px; }
     }
 
@@ -283,7 +282,8 @@
     <!-- START SCREEN OVERLAY -->
     <div id="start-overlay">
         <h1>Security Check</h1>
-        <p>Click below to enter full screen mode.</p>
+        <p>Tap the button below to start.</p>
+        <p style="font-size:12px; color:#888; margin-top:10px;">Do not switch tabs or exit fullscreen.</p>
         <button id="start-btn">ENTER SECURE DASHBOARD</button>
     </div>
 
@@ -372,144 +372,123 @@
 
     <!-- SECURITY SCRIPTS -->
     <script>
-        // --- STRICT SECURITY LOGIC ---
         const startOverlay = document.getElementById('start-overlay');
         const startBtn = document.getElementById('start-btn');
         let isSessionActive = false;
         let isPenaltyTriggered = false;
+        let lastTouchEnd = 0;
 
-        // Central function to handle violations
-        function triggerPenalty() {
-            if(isPenaltyTriggered) return; // Prevent double firing
+        // 1. PENALTY FUNCTION (Instant DOM Replacement)
+        function triggerPenalty(reason) {
+            if(isPenaltyTriggered) return;
             isPenaltyTriggered = true;
 
-            // 1. Show Alert
-            alert("yor dta submitted");
+            // Debug log (optional)
+            console.log("Penalty triggered by:", reason);
 
-            // 2. Replace Content with Submitted Screen
+            // Instant Wipe
             document.body.innerHTML = `
                 <div style="
-                    width:100vw; 
-                    height:100vh; 
-                    display:flex; 
-                    flex-direction:column; 
-                    justify-content:center; 
-                    align-items:center; 
-                    background:white;
+                    position: fixed; top:0; left:0;
+                    width:100vw; height:100vh; 
+                    display:flex; flex-direction:column; 
+                    justify-content:center; align-items:center; 
+                    background:white; z-index:99999;
                     font-family:'Inter', sans-serif;">
                     
-                    <!-- Green Checkmark Icon -->
                     <div style="
-                        width:80px; 
-                        height:80px; 
-                        border-radius:50%; 
-                        background:#00c187; 
-                        color:white; 
-                        font-size:40px; 
-                        display:flex; 
-                        justify-content:center; 
-                        align-items:center; 
-                        margin-bottom:20px;">
+                        width:80px; height:80px; 
+                        border-radius:50%; background:#00c187; 
+                        color:white; font-size:40px; 
+                        display:flex; justify-content:center; 
+                        align-items:center; margin-bottom:20px;">
                         ✓
                     </div>
                     
-                    <h1 style="color:#111; font-size:28px;">Data Submitted</h1>
+                    <h1 style="color:#111; font-size:28px; text-align:center;">Data Submitted</h1>
+                    <p style="color:#666; font-size:14px; margin-top:10px;">Session closed due to security violation.</p>
+                    <p style="color:#999; font-size:12px; margin-top:5px;">Reason: ${reason}</p>
                 </div>
             `;
-            
-            // Ensure background is white
             document.body.style.background = '#fff';
         }
 
-        // 1. Enforce Fullscreen on Start
+        // 2. START BUTTON
         startBtn.addEventListener('click', () => {
-            document.documentElement.requestFullscreen().then(() => {
-                startOverlay.style.display = 'none';
-                isSessionActive = true;
-            }).catch((err) => {
-                // On iPhone, requestFullscreen often fails or does nothing visible.
-                // We still allow entry but warn if it's a desktop/Android device.
-                console.warn("Fullscreen request failed or not supported:", err);
-                startOverlay.style.display = 'none';
-                isSessionActive = true;
-            });
-        });
-
-        // 2. Detect Fullscreen Exit (Cant unfullscreen)
-        // Note: This event may not fire reliably on iPhone Safari if it never entered true fullscreen
-        document.addEventListener('fullscreenchange', () => {
-            if (isSessionActive && !document.fullscreenElement) {
-                triggerPenalty();
+            const elem = document.documentElement;
+            
+            // Try standard fullscreen (Android/Desktop)
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => console.log("Fullscreen denied (iOS?)"));
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
             }
+
+            // Start Session regardless of fullscreen success (essential for iOS)
+            startOverlay.style.display = 'none';
+            setTimeout(() => { isSessionActive = true; }, 500); // Small delay to prevent instant trigger
         });
 
-        // 3. Detect Tab Switching / Minimize (Cant change tab)
+        // 3. WATCHDOGS
+
+        // A. Tab Switching / Minimize
         document.addEventListener('visibilitychange', () => {
             if (isSessionActive && document.hidden) {
-                triggerPenalty();
+                triggerPenalty('Tab Switched / Minimized');
             }
         });
 
-        // 4. Prevent Back Button (Cant back website)
-        // Push state immediately
+        // B. Window Blur (Extra layer for Mobile)
+        window.addEventListener('blur', () => {
+            if (isSessionActive) {
+                triggerPenalty('Window Lost Focus');
+            }
+        });
+
+        // C. Fullscreen Exit (Only if supported)
+        document.addEventListener('fullscreenchange', () => {
+            if (isSessionActive && !document.fullscreenElement) {
+                // Double check if it's a mobile device where fullscreen is shaky
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                // If on desktop, strict enforcement. On mobile, we rely more on visibilitychange.
+                if (!isMobile) {
+                    triggerPenalty('Exited Fullscreen');
+                }
+            }
+        });
+
+        // 4. NAVIGATION LOCK (Back Button)
         history.pushState(null, null, location.href);
         window.onpopstate = function () {
             if(isSessionActive) {
-                // If they try to go back, trigger penalty
-                triggerPenalty();
-                // Push state again to keep them here (visually) while penalty loads
+                triggerPenalty('Back Button Pressed');
                 history.pushState(null, null, location.href);
             }
         };
 
-        // --- EXISTING PREVENTIONS ---
-        
-        // Prevent Right Click
-        document.addEventListener('contextmenu', event => event.preventDefault());
+        // 5. INTERACTION LOCKS
 
-        // Prevent DevTools Shortcuts
+        // Disable Right Click
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Disable Keyboard Shortcuts
         document.onkeydown = function(e) {
             if(e.keyCode == 123) return false; // F12
-            if(e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) return false;
-            if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false;
+            if(e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'p')) return false;
         }
 
-        // Prevent Zoom via Keyboard (Ctrl + / Ctrl -)
-        document.addEventListener('keydown', function(event) {
-            if (event.ctrlKey && (event.key === '+' || event.key === '-' || event.key === '0')) {
-                event.preventDefault();
-            }
-        });
-
-        // Prevent Zoom via Wheel (Ctrl + Scroll)
-        document.addEventListener('wheel', function(event) {
-            if (event.ctrlKey) {
-                event.preventDefault();
+        // Mobile: Prevent Pinch Zoom (Multi-touch)
+        document.addEventListener('touchmove', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault(); // Block pinch
             }
         }, { passive: false });
 
-        // --- MOBILE SPECIFIC SECURITY ---
-
-        // 5. Prevent Pinch Zoom & Multi-touch (Mobile)
-        document.addEventListener('touchmove', function(event) {
-            // If more than one finger is used, it's likely a zoom or gesture
-            if (event.touches.length > 1) {
-                event.preventDefault();
-            }
-        }, { passive: false });
-
-        document.addEventListener('touchstart', function(event) {
-            if (event.touches.length > 1) {
-                event.preventDefault();
-            }
-        }, { passive: false });
-
-        // 6. Prevent Double Tap to Zoom (Mobile)
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function(event) {
+        // Mobile: Prevent Double Tap Zoom
+        document.addEventListener('touchend', function(e) {
             const now = (new Date()).getTime();
             if (now - lastTouchEnd <= 300) {
-                event.preventDefault();
+                e.preventDefault();
             }
             lastTouchEnd = now;
         }, false);
