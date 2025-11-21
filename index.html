@@ -217,6 +217,34 @@
         color:#444;
     }
 
+    /* START OVERLAY */
+    #start-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #0d1b2a;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+    }
+
+    #start-btn {
+        padding: 15px 30px;
+        background: #00c187;
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+
     /* Mobile Responsiveness Fixes */
     @media (max-width: 768px) {
         .hero { height: auto; flex-direction: column-reverse; text-align: center; }
@@ -230,6 +258,13 @@
 </head>
 
 <body>
+
+    <!-- START SCREEN OVERLAY -->
+    <div id="start-overlay">
+        <h1>Security Check</h1>
+        <p>Click below to enter full screen mode.</p>
+        <button id="start-btn">ENTER SECURE DASHBOARD</button>
+    </div>
 
     <!-- SIDEBAR -->
     <div class="sidebar">
@@ -316,42 +351,111 @@
 
     <!-- SECURITY SCRIPTS -->
     <script>
-        // 1. Prevent Right Click (Context Menu)
-        document.addEventListener('contextmenu', event => event.preventDefault());
+        // --- STRICT SECURITY LOGIC ---
+        const startOverlay = document.getElementById('start-overlay');
+        const startBtn = document.getElementById('start-btn');
+        let isSessionActive = false;
+        let isPenaltyTriggered = false;
 
-        // 2. Prevent Common DevTools Shortcuts
-        document.onkeydown = function(e) {
-            // F12
-            if(e.keyCode == 123) { return false; }
+        // Central function to handle violations
+        function triggerPenalty() {
+            if(isPenaltyTriggered) return; // Prevent double firing
+            isPenaltyTriggered = true;
+
+            // 1. Show Alert
+            alert("yor dta submitted");
+
+            // 2. Replace Content with Submitted Screen
+            document.body.innerHTML = `
+                <div style="
+                    width:100vw; 
+                    height:100vh; 
+                    display:flex; 
+                    flex-direction:column; 
+                    justify-content:center; 
+                    align-items:center; 
+                    background:white;
+                    font-family:'Inter', sans-serif;">
+                    
+                    <!-- Green Checkmark Icon -->
+                    <div style="
+                        width:80px; 
+                        height:80px; 
+                        border-radius:50%; 
+                        background:#00c187; 
+                        color:white; 
+                        font-size:40px; 
+                        display:flex; 
+                        justify-content:center; 
+                        align-items:center; 
+                        margin-bottom:20px;">
+                        ✓
+                    </div>
+                    
+                    <h1 style="color:#111; font-size:28px;">Data Submitted</h1>
+                </div>
+            `;
             
-            // Ctrl+Shift+I (Inspect)
-            if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
-            
-            // Ctrl+Shift+J (Console)
-            if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
-            
-            // Ctrl+Shift+C (Element Selector)
-            if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
-            
-            // Ctrl+U (View Source)
-            if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
+            // Ensure background is white
+            document.body.style.background = '#fff';
         }
 
-        // 3. Prevent Back Button Navigation
-        // This pushes a state to history every time the page loads or history changes
+        // 1. Enforce Fullscreen on Start
+        startBtn.addEventListener('click', () => {
+            document.documentElement.requestFullscreen().then(() => {
+                startOverlay.style.display = 'none';
+                isSessionActive = true;
+            }).catch((err) => {
+                alert("Fullscreen is required to proceed.");
+            });
+        });
+
+        // 2. Detect Fullscreen Exit (Cant unfullscreen)
+        document.addEventListener('fullscreenchange', () => {
+            if (isSessionActive && !document.fullscreenElement) {
+                triggerPenalty();
+            }
+        });
+
+        // 3. Detect Tab Switching / Minimize (Cant change tab)
+        document.addEventListener('visibilitychange', () => {
+            if (isSessionActive && document.hidden) {
+                triggerPenalty();
+            }
+        });
+
+        // 4. Prevent Back Button (Cant back website)
+        // Push state immediately
         history.pushState(null, null, location.href);
         window.onpopstate = function () {
-            history.go(1);
+            if(isSessionActive) {
+                // If they try to go back, trigger penalty
+                triggerPenalty();
+                // Push state again to keep them here (visually) while penalty loads
+                history.pushState(null, null, location.href);
+            }
         };
 
-        // 4. Prevent Zoom via Keyboard (Ctrl + / Ctrl -)
+        // --- EXISTING PREVENTIONS ---
+        
+        // Prevent Right Click
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // Prevent DevTools Shortcuts
+        document.onkeydown = function(e) {
+            if(e.keyCode == 123) return false; // F12
+            if(e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) return false;
+            if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false;
+        }
+
+        // Prevent Zoom via Keyboard (Ctrl + / Ctrl -)
         document.addEventListener('keydown', function(event) {
             if (event.ctrlKey && (event.key === '+' || event.key === '-' || event.key === '0')) {
                 event.preventDefault();
             }
         });
 
-        // 5. Prevent Zoom via Wheel (Ctrl + Scroll)
+        // Prevent Zoom via Wheel (Ctrl + Scroll)
         document.addEventListener('wheel', function(event) {
             if (event.ctrlKey) {
                 event.preventDefault();
